@@ -283,52 +283,14 @@ serve(async (req) => {
   }
 });
 
-async function runDryRun(body: any) {
-  const inName: string = String(body?.instance?.name || "").trim();
-  const inToken: string = String(body?.instance?.token || "").trim();
+async function runDryRun(instRow: any) {
   const checks: any = {
-    instance: { ok: false, matched_by: null, name_mismatch: false, instance_name: null },
+    instance: { ok: true, matched_by: "secret", name_mismatch: false, instance_name: instRow.name },
     agent: { ok: false, has_key: false, enabled: false },
     groq: { ok: false },
     uazapi: { ok: false },
   };
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
-
-  // 1. Instance lookup
-  let instRow: any = null;
-  if (inToken) {
-    const { data } = await supabase
-      .from("whatsapp_instances")
-      .select("*")
-      .eq("instance_token", inToken)
-      .maybeSingle();
-    if (data) {
-      instRow = data;
-      checks.instance.matched_by = "token";
-    }
-  }
-  if (!instRow && inName) {
-    const { data } = await supabase
-      .from("whatsapp_instances")
-      .select("*")
-      .not("instance_token", "is", null)
-      .order("updated_at", { ascending: false })
-      .limit(20);
-    instRow = (data || []).find((r: any) => normalizeName(r.name) === normalizeName(inName)) || null;
-    if (instRow) checks.instance.matched_by = "name";
-  }
-  if (instRow) {
-    checks.instance.ok = true;
-    checks.instance.instance_name = instRow.name;
-    checks.instance.name_mismatch = !!(inName && instRow.name !== inName);
-  } else {
-    checks.instance.error = "Nenhuma instância encontrada com esse token/nome";
-    return ok({ ok: false, checks });
-  }
 
   // 2. Agent
   const agent = await getAgentConfig(instRow.user_id);
