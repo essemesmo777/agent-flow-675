@@ -435,7 +435,7 @@ export default function Conversas() {
       {/* Header */}
       <header className="border-b px-4 h-14 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <Logo width={70} height={30} />
+          <Logo width={140} height={40} />
           <nav className="hidden sm:flex items-center gap-1 ml-2">
             <Link to="/" className="px-3 py-1.5 text-sm rounded-md bg-muted font-medium">
               Conversas
