@@ -55,53 +55,56 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    // --- Shared secret: identifies which instance the event belongs to ---
+    const url = new URL(req.url);
+    const providedSecret =
+      req.headers.get("x-webhook-secret") || url.searchParams.get("secret") || "";
+
     const body = await req.json();
     const event = body.EventType || body.event || body.type || "messages";
     if (event === "test") return ok({ ok: true, message: "webhook ok" });
-    if (event === "dry_run") return await runDryRun(body);
-    if (event === "connection" || event === "connection.update") return ok();
 
-    const { text, fromMe, phone, isGroup, contactName, instanceName, instanceToken, message } = extractText(body);
-
-    if (!message || isGroup || !text || !phone) return ok();
+    if (!providedSecret) {
+      console.warn("[webhook] missing webhook secret");
+      return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Find instance by token or name → resolves owner
-    let instRow: any = null;
-    if (instanceToken) {
-      const { data } = await supabase
-        .from("whatsapp_instances")
-        .select("*")
-        .eq("instance_token", instanceToken)
-        .maybeSingle();
-      instRow = data;
-    }
-    if (!instRow && instanceName) {
-      const { data } = await supabase
-        .from("whatsapp_instances")
-        .select("*")
-        .eq("name", instanceName)
-        .maybeSingle();
-      instRow = data;
-    }
-    if (!instRow && instanceName) {
-      const { data } = await supabase
-        .from("whatsapp_instances")
-        .select("*")
-        .not("instance_token", "is", null)
-        .order("updated_at", { ascending: false })
-        .limit(20);
+    const { data: secretRow } = await supabase
+      .from("whatsapp_instances")
+      .select("*")
+      .eq("webhook_secret", providedSecret)
+      .maybeSingle();
 
-      instRow = (data || []).find((row: any) => normalizeName(row.name) === normalizeName(instanceName)) || null;
+    if (!secretRow) {
+      console.warn("[webhook] invalid webhook secret");
+      return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
-    if (!instRow) {
-      console.warn("[webhook] instance not found", { instanceName, hasToken: !!instanceToken });
+
+    if (event === "dry_run") return await runDryRun(secretRow);
+    if (event === "connection" || event === "connection.update") return ok();
+
+    const { text, fromMe, phone, isGroup, contactName, instanceName, instanceToken, message } = extractText(body);
+
+    if (!message || isGroup || !text || !phone) return ok();
+
+    // A instância é sempre a dona do segredo — nunca resolvida por nome/token do payload
+    const instRow: any = secretRow;
+    if (instanceToken && instRow.instance_token && instanceToken !== instRow.instance_token) {
+      console.warn("[webhook] payload token does not match instance");
       return ok();
     }
+
 
     const userId = instRow.user_id;
 
