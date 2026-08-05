@@ -12,9 +12,8 @@ export const Logo = ({ iconSize = 96, className = "", width, height }: LogoProps
       <img
         src="/rankbrum-logo.png"
         alt="Rankbrum.AI"
-        width={width}
-        height={height}
-        className={`w-full max-w-[${width}px] h-auto object-contain ${className}`}
+        style={{ width, height: height ?? "auto", maxWidth: "100%" }}
+        className={`object-contain ${className}`}
       />
     );
   }
