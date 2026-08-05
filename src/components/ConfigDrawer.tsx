@@ -69,6 +69,7 @@ export function ConfigDrawer({ open, onOpenChange }: Props) {
   const [serverUrl, setServerUrl] = useState("");
   const [instanceToken, setInstanceToken] = useState("");
   const [hasInstanceToken, setHasInstanceToken] = useState(false);
+  const [webhookSecret, setWebhookSecret] = useState("");
   const [savingUazapi, setSavingUazapi] = useState(false);
   const [testingUazapi, setTestingUazapi] = useState(false);
   // Follow-up automático
@@ -98,7 +99,7 @@ export function ConfigDrawer({ open, onOpenChange }: Props) {
     if (!user) return;
     const { data } = await supabase
       .from("whatsapp_instances")
-      .select("id,server_url,instance_token")
+      .select("id,server_url,instance_token,webhook_secret")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(1)
@@ -107,8 +108,10 @@ export function ConfigDrawer({ open, onOpenChange }: Props) {
       setInstanceId(data.id);
       setServerUrl(data.server_url || "");
       setHasInstanceToken(!!data.instance_token);
+      setWebhookSecret((data as any).webhook_secret || "");
     }
   };
+
 
   useEffect(() => {
     if (!open) return;
@@ -152,6 +155,8 @@ export function ConfigDrawer({ open, onOpenChange }: Props) {
         setHasInstanceToken(true);
         setInstanceToken("");
       }
+      loadUazapi();
+
     }
   };
 
@@ -231,7 +236,9 @@ export function ConfigDrawer({ open, onOpenChange }: Props) {
     }
   };
 
-  const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`;
+  const webhookUrl = webhookSecret
+    ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook?secret=${webhookSecret}`
+    : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`;
 
   const copyWebhook = async () => {
     try {
@@ -243,28 +250,21 @@ export function ConfigDrawer({ open, onOpenChange }: Props) {
   };
 
   const testWebhook = async () => {
+    if (!webhookSecret) {
+      toast({
+        variant: "destructive",
+        title: "Salve a conexão primeiro",
+        description: "A chave do webhook é gerada ao salvar a instância.",
+      });
+      return;
+    }
     setTestingHook(true);
     setHookReport(null);
     try {
-      // Resolve token: usa o input, senão busca do banco
-      let tokenToUse = instanceToken.trim();
-      if (!tokenToUse && user) {
-        const { data } = await supabase
-          .from("whatsapp_instances")
-          .select("instance_token")
-          .eq("user_id", user.id)
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        tokenToUse = data?.instance_token || "";
-      }
       const res = await fetch(webhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event: "dry_run",
-          instance: { name: "principal", token: tokenToUse },
-        }),
+        body: JSON.stringify({ event: "dry_run" }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -275,6 +275,7 @@ export function ConfigDrawer({ open, onOpenChange }: Props) {
     } catch (e: any) {
       toast({ variant: "destructive", title: "Falha no webhook", description: e.message });
     } finally {
+
       setTestingHook(false);
     }
   };

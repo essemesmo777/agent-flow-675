@@ -21,34 +21,57 @@ serve(async (req) => {
   }
 
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    // --- Auth: require a valid session ---
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return json({ ok: false, error: "Não autorizado" }, 401);
+    }
+    const authClient = createClient(supabaseUrl!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: userData, error: userError } = await authClient.auth.getUser(
+      authHeader.replace("Bearer ", ""),
+    );
+    const userId = userData?.user?.id;
+    if (userError || !userId) {
+      return json({ ok: false, error: "Não autorizado" }, 401);
+    }
+
     const body = await req.json();
     const { action, name, phone, instance_token: bodyInstanceToken } = body;
 
     // Resolve configuração preferencialmente pela instância do usuário
     let baseUrl: string | null = null;
-    let instance_token = bodyInstanceToken || null;
+    let instance_token: string | null = null;
     let adminToken: string | null = null;
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (supabaseUrl && serviceKey && instance_token) {
-      const admin = createClient(supabaseUrl, serviceKey);
+    const admin = createClient(supabaseUrl!, serviceKey!);
+
+    if (bodyInstanceToken) {
+      // Só permite operar em instâncias que pertencem ao usuário autenticado
       const { data: instRow } = await admin
         .from("whatsapp_instances")
         .select("server_url, instance_token, user_id")
-        .eq("instance_token", instance_token)
+        .eq("instance_token", bodyInstanceToken)
         .maybeSingle();
-      if (instRow?.server_url) {
-        baseUrl = instRow.server_url.replace(/\/$/, "");
-        instance_token = instRow.instance_token;
+      if (!instRow || instRow.user_id !== userId) {
+        return json({ ok: false, error: "Instância não encontrada" }, 403);
       }
+      instance_token = instRow.instance_token;
+      if (instRow.server_url) baseUrl = instRow.server_url.replace(/\/$/, "");
     }
 
+    // Verifica se o usuário é admin antes de permitir o fallback global
+    const { data: isAdmin } = await admin.rpc("has_role", { _user_id: userId, _role: "admin" });
+
     // Fallback para configuração global (admin)
-    const globalConfig = await getUazapiConfig();
+    const globalConfig = isAdmin ? await getUazapiConfig() : null;
     if (!baseUrl) {
       if (!globalConfig) {
-        console.error("Missing Uazapi config");
+        console.error("Missing Uazapi config for user");
         return json({
           ok: false,
           error: "Uazapi não configurado. Configure em Configurações > Uazapi.",
@@ -60,6 +83,11 @@ serve(async (req) => {
     }
 
     const UAZAPI_ADMIN_TOKEN = adminToken;
+
+    // Criar/deletar instâncias exige o token administrativo global (apenas admins)
+    if ((action === "create" || action === "delete") && !isAdmin) {
+      return json({ ok: false, error: "Ação permitida apenas para administradores" }, 403);
+    }
 
     console.log(`[manage-instance] action=${action}, name=${name || ""}, phone=${phone || ""}`);
 
