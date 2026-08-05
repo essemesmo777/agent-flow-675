@@ -64,7 +64,7 @@ const Login = () => {
       </div>
       <div className="w-full max-w-sm space-y-8 animate-fade-in">
         <div className="text-center space-y-2 flex flex-col items-center">
-          <Logo width={110} height={46} />
+          <Logo width={220} />
         </div>
 
         <div className="rounded-2xl border-2 border-primary/40 p-6 space-y-5 bg-card">

@@ -7,7 +7,19 @@ interface LogoProps {
 }
 
 export const Logo = ({ iconSize = 96, className = "", width, height }: LogoProps) => {
-  const size = width ?? height ?? iconSize;
+  if (width) {
+    return (
+      <img
+        src="/rankbrum-logo.png"
+        alt="Rankbrum.AI"
+        width={width}
+        height={height}
+        className={`w-full max-w-[${width}px] h-auto object-contain ${className}`}
+      />
+    );
+  }
+
+  const size = height ?? iconSize;
   return (
     <img
       src="/rankbrum-logo.png"
