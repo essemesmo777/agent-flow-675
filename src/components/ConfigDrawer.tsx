@@ -69,6 +69,7 @@ export function ConfigDrawer({ open, onOpenChange }: Props) {
   const [serverUrl, setServerUrl] = useState("");
   const [instanceToken, setInstanceToken] = useState("");
   const [hasInstanceToken, setHasInstanceToken] = useState(false);
+  const [webhookSecret, setWebhookSecret] = useState("");
   const [savingUazapi, setSavingUazapi] = useState(false);
   const [testingUazapi, setTestingUazapi] = useState(false);
   // Follow-up automático
