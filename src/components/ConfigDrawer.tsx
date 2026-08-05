@@ -155,6 +155,8 @@ export function ConfigDrawer({ open, onOpenChange }: Props) {
         setHasInstanceToken(true);
         setInstanceToken("");
       }
+      loadUazapi();
+
     }
   };
 
