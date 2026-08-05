@@ -98,7 +98,7 @@ export function ConfigDrawer({ open, onOpenChange }: Props) {
     if (!user) return;
     const { data } = await supabase
       .from("whatsapp_instances")
-      .select("id,server_url,instance_token")
+      .select("id,server_url,instance_token,webhook_secret")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(1)
@@ -107,8 +107,10 @@ export function ConfigDrawer({ open, onOpenChange }: Props) {
       setInstanceId(data.id);
       setServerUrl(data.server_url || "");
       setHasInstanceToken(!!data.instance_token);
+      setWebhookSecret((data as any).webhook_secret || "");
     }
   };
+
 
   useEffect(() => {
     if (!open) return;
